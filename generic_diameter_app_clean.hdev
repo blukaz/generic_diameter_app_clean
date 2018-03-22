@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<hdevelop file_version="1.1" halcon_version="12.0">
+<procedure name="main">
+<interface/>
+<body>
+<l>open_framegrabber ('GigEVision', 0, 0, 0, 0, 0, 0, 'default', -1, 'default', -1, 'false', 'default', 'GC3851M_CAM_4', 0, -1, AcqHandle)</l>
+<l>set_framegrabber_param (AcqHandle, 'ExposureTime', 3500.0)</l>
+<c></c>
+<c></c>
+<l>side := 2</l>
+<l>dia := 1</l>
+<l>grab_image_start (AcqHandle, -1)</l>
+<l>grab_image_async (Image, AcqHandle, -1)</l>
+<l>try</l>
+<c>    </c>
+<l>    get_image_size (Image, Width, Height)  </l>
+<c>    ** Define constants and tuples:</c>
+<l>    HalfH := Height/2</l>
+<l>    HalfW := Width/2 </l>
+<l>    row_len := Height</l>
+<l>    row_outer := []</l>
+<l>    col_outer := []</l>
+<c>    </c>
+<c>    ** Edge detection</c>
+<l>    derivate_gauss (Image, DerivGauss, 1, 'x')</l>
+<c>    ** diameter 2 doesn't have a clean background =&gt; different values</c>
+<l>    if (dia = 2 or dia = 5)</l>
+<l>        dual_threshold (DerivGauss, RegionCrossings, 20, 2, 2)</l>
+<l>        union1 (RegionCrossings, Region)</l>
+<l>    else</l>
+<l>        dual_threshold (DerivGauss, RegionCrossings, 20, 12, 2)</l>
+<l>        union1 (RegionCrossings, Region)</l>
+<l>    endif</l>
+<c> </c>
+<c>    ** Retrieve points from detected edges</c>
+<l>    get_region_points (Region, Rows, Cols)</l>
+<c>    </c>
+<c>    ** Side 1 =&gt; upper side closer to probe</c>
+<l>    if(side = 1)</l>
+<c>        ** Extract the points which define the outer or inner edge</c>
+<l>        if (dia = 3 or dia = 4 or dia = 5)</l>
+<l>            for i := 1 to row_len by 1</l>
+<l>                tuple_find(Rows, i - 1, Indices)</l>
+<c>                ** if none point exists in this row replace it with an incremental interpolation</c>
+<l>                if (Indices = -1)</l>
+<l>                    row_outer[i - 1] := row_outer[i - 2] + 1</l>
+<l>                    col_outer[i - 1] := col_outer[i - 2]</l>
+<l>                    continue</l>
+<l>                endif</l>
+<l>                tuple_length (Indices, Length)</l>
+<l>                tuple_min (Cols[Indices], col_min)</l>
+<l>                tuple_find (Cols[Indices], col_min, indice_min)</l>
+<l>                row_outer[i - 1] := Rows[Indices[indice_min]]</l>
+<l>                col_outer[i - 1] := Cols[Indices[indice_min]]</l>
+<l>            endfor    </l>
+<l>        elseif (dia = 1 or dia = 2)</l>
+<l>            for i := 1 to row_len by 1</l>
+<l>                tuple_find(Rows, i - 1, Indices)</l>
+<c>                ** if none point exists in this row replace it with an incremental interpolation</c>
+<l>                if (Indices = -1)</l>
+<l>                    row_outer[i - 1] := row_outer[i - 2] + 1</l>
+<l>                    col_outer[i - 1] := col_outer[i - 2]</l>
+<l>                    continue</l>
+<l>                endif</l>
+<l>                tuple_length (Indices, Length)</l>
+<l>                tuple_max (Cols[Indices], col_max)</l>
+<l>                tuple_find (Cols[Indices], col_max, indice_max)</l>
+<l>                row_outer[i - 1] := Rows[Indices[indice_max]]</l>
+<l>                col_outer[i - 1] := Cols[Indices[indice_max]]</l>
+<l>            endfor</l>
+<l>        endif</l>
+<c>        </c>
+<c>        ** retrieve the outer or inner edge points + cirlce fitting</c>
+<l>        gen_region_points (region_outer, row_outer, col_outer)</l>
+<l>        gen_contour_polygon_xld (contour_outer, row_outer, col_outer)</l>
+<l>        fit_circle_contour_xld (contour_outer, 'geotukey', -1, 0, 0, 3, 2, Row, Col, Radius, StartPhi, EndPhi, PointOrder)</l>
+<l>        gen_circle_contour_xld (ContCircle, Row, Col, Radius, 0, 6.28318, 'positive', 1)</l>
+<l>        get_contour_xld (ContCircle, Row, Col)</l>
+<c>        </c>
+<c>        ** find the maximum of the estimated circle</c>
+<l>        tuple_max (Col, TupleMax)</l>
+<l>        tuple_find_first (Col, TupleMax, IndexMax)</l>
+<c>        </c>
+<c>        ** calculate pixel and mm outputs</c>
+<l>        colToMax0:= Col[IndexMax]</l>
+<l>        output:= -HalfW + colToMax0</l>
+<l>        outputmm:= output * 0.001675        </l>
+<l>    endif</l>
+<c>        </c>
+<c>    ** Side 2 =&gt; side closer to vertical moving axis</c>
+<l>    if(side ==2 )</l>
+<c>        ** Extract the points which define the outer or inner edge</c>
+<l>        if (dia = 3 or dia = 4 or dia = 5)</l>
+<l>            for i := 1 to row_len by 1</l>
+<l>                tuple_find(Rows, i - 1, Indices)</l>
+<c>                ** if none point exists in this row replace it with an incremental interpolation</c>
+<l>                if (Indices = -1)</l>
+<l>                    row_outer[i - 1] := row_outer[i - 2] + 1</l>
+<l>                    col_outer[i - 1] := col_outer[i - 2]</l>
+<l>                    continue</l>
+<l>                endif</l>
+<l>                tuple_length (Indices, Length)</l>
+<l>                tuple_max (Cols[Indices], col_max)</l>
+<l>                tuple_find (Cols[Indices], col_max, indice_max)</l>
+<l>                row_outer[i - 1] := Rows[Indices[indice_max]]</l>
+<l>                col_outer[i - 1] := Cols[Indices[indice_max]]</l>
+<l>            endfor    </l>
+<l>        elseif (dia = 1 or dia = 2)</l>
+<l>            for i := 1 to row_len by 1</l>
+<l>                tuple_find(Rows, i - 1, Indices)</l>
+<c>                ** if none point exists in this row replace it with an incremental interpolation</c>
+<l>                if (Indices = -1)</l>
+<l>                    row_outer[i - 1] := row_outer[i - 2] + 1</l>
+<l>                    col_outer[i - 1] := col_outer[i - 2]</l>
+<l>                    continue</l>
+<l>                endif</l>
+<l>                tuple_length (Indices, Length)</l>
+<l>                tuple_min (Cols[Indices], col_min)</l>
+<l>                tuple_find (Cols[Indices], col_min, indice_min)</l>
+<l>                row_outer[i - 1] := Rows[Indices[indice_min]]</l>
+<l>                col_outer[i - 1] := Cols[Indices[indice_min]]</l>
+<l>            endfor</l>
+<l>        endif</l>
+<c>        </c>
+<c>        ** retrieve the outer or inner edge points + cirlce fitting</c>
+<l>        gen_region_points (region_outer, row_outer, col_outer)</l>
+<l>        gen_contour_polygon_xld (contour_outer, row_outer, col_outer)</l>
+<l>        fit_circle_contour_xld (contour_outer, 'geotukey', -1, 0, 0, 3, 2, Row, Col, Radius, StartPhi, EndPhi, PointOrder)</l>
+<l>        gen_circle_contour_xld (ContCircle, Row, Col, Radius, 0, 6.28318, 'positive', 1)       </l>
+<l>        get_contour_xld (ContCircle, Row, Col)</l>
+<c>        </c>
+<c>        ** find the minimum of the estimated circle</c>
+<l>        tuple_min (Col, TupleMin)</l>
+<l>        tuple_find_first (Col, TupleMin, IndexMin)</l>
+<c>        </c>
+<c>        ** calculate pixel and mm outputs</c>
+<l>        colToMin0:= Col[IndexMin]</l>
+<l>        output:= HalfW - colToMin0</l>
+<l>        outputmm:= output * 0.001675</l>
+<l>    endif</l>
+<c>    </c>
+<c>    </c>
+<l>catch (Exception)</l>
+<l>    MessageError := ' ERROR: Not able to analize photo, move horizontal axis'</l>
+<c>    </c>
+<l>endtry</l>
+<c></c>
+<l>close_framegrabber (AcqHandle) </l>
+<c></c>
+<c></c>
+<c></c>
+<c></c>
+<c></c>
+<c></c>
+<c></c>
+<c></c>
+</body>
+<docu id="main">
+<parameters/>
+</docu>
+</procedure>
+</hdevelop>
